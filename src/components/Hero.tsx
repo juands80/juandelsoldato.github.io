@@ -193,6 +193,16 @@ export default function Hero() {
           </svg>
         </motion.div>
       </div>
+
+      {/* Smooth transition to next section */}
+      <div
+        className="absolute bottom-0 left-0 w-full pointer-events-none"
+        style={{
+          height: 180,
+          zIndex: 20,
+          background: "linear-gradient(to bottom, transparent 0%, rgba(3,3,10,0.3) 30%, #03030A 70%)",
+        }}
+      />
     </section>
   );
 }
