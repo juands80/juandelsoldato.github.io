@@ -100,8 +100,10 @@ export default function Hero() {
             color: "#D5D8E5",
           }}
         >
-          I build scalable, reliable and high-performance software solutions
-          with modern technologies and{" "}
+          <span style={{ color: "#000000" }}>
+            I build scalable, reliable and high-performance software solutions
+            with modern technologies and{" "}
+          </span>
           <span
             style={{
               background: "linear-gradient(90deg, #5D8FFF 0%, #7A62FF 30%, #A85EFF 65%, #FF6DA9 100%)",
