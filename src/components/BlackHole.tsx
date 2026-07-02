@@ -1,8 +1,254 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
+interface Particle {
+  angle: number;
+  radius: number;
+  size: number;
+  speed: number;
+  opacity: number;
+  color: { r: number; g: number; b: number };
+  turbulence: number;
+  turbSpeed: number;
+  turbOffset: number;
+}
+
 export default function BlackHole() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId: number;
+    let time = 0;
+
+    const particles: Particle[] = [];
+    const particleCount = 800;
+
+    const colors = [
+      { r: 255, g: 255, b: 255 },   // white
+      { r: 200, g: 180, b: 255 },   // lavender
+      { r: 93, g: 143, b: 255 },    // electric blue
+      { r: 122, g: 98, b: 255 },    // violet
+      { r: 217, g: 79, b: 255 },    // magenta
+      { r: 255, g: 114, b: 169 },   // pink
+      { r: 255, g: 180, b: 130 },   // soft orange
+    ];
+
+    const resize = () => {
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    };
+
+    const initParticles = () => {
+      particles.length = 0;
+      for (let i = 0; i < particleCount; i++) {
+        const t = Math.random();
+        const colorIdx = Math.floor(t * colors.length);
+        const nextIdx = Math.min(colorIdx + 1, colors.length - 1);
+        const mix = (t * (colors.length - 1)) % 1;
+
+        const c1 = colors[colorIdx];
+        const c2 = colors[nextIdx];
+
+        particles.push({
+          angle: Math.random() * Math.PI * 2,
+          radius: 0.28 + Math.random() * 0.35,
+          size: 1 + Math.random() * 3,
+          speed: 0.3 + Math.random() * 0.7,
+          opacity: 0.3 + Math.random() * 0.7,
+          color: {
+            r: Math.round(c1.r + (c2.r - c1.r) * mix),
+            g: Math.round(c1.g + (c2.g - c1.g) * mix),
+            b: Math.round(c1.b + (c2.b - c1.b) * mix),
+          },
+          turbulence: 0.002 + Math.random() * 0.008,
+          turbSpeed: 0.2 + Math.random() * 0.5,
+          turbOffset: Math.random() * Math.PI * 2,
+        });
+      }
+    };
+
+    resize();
+    initParticles();
+
+    const handleResize = () => {
+      resize();
+      initParticles();
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    const draw = (timestamp: number) => {
+      time = timestamp / 1000;
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const size = Math.min(w, h);
+      const diskScale = size * 0.42;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // === Outer glow ===
+      const outerGrad = ctx.createRadialGradient(cx, cy, size * 0.12, cx, cy, size * 0.45);
+      outerGrad.addColorStop(0, "rgba(139,115,255,0.04)");
+      outerGrad.addColorStop(0.5, "rgba(200,120,255,0.02)");
+      outerGrad.addColorStop(1, "transparent");
+      ctx.fillStyle = outerGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // === Event horizon outer glow ===
+      const glowGrad = ctx.createRadialGradient(cx, cy, size * 0.1, cx, cy, size * 0.22);
+      glowGrad.addColorStop(0, "rgba(94,86,255,0.15)");
+      glowGrad.addColorStop(0.5, "rgba(155,91,255,0.08)");
+      glowGrad.addColorStop(1, "transparent");
+      ctx.fillStyle = glowGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // === Accretion disk (particle-based) ===
+      // Draw back half first
+      for (let pass = 0; pass < 2; pass++) {
+        for (const p of particles) {
+          const turbX = Math.sin(time * p.turbSpeed + p.turbOffset) * p.turbulence;
+          const turbY = Math.cos(time * p.turbSpeed * 0.7 + p.turbOffset * 1.3) * p.turbulence * 0.7;
+
+          const angle = p.angle + time * p.speed * 0.15 + turbX;
+
+          // Y-axis compression for perspective (front half visible, back half behind)
+          const perspectiveY = Math.sin(angle) * (0.55 + 0.05 * Math.sin(time * 0.3 + p.turbOffset));
+
+          // Determine if this particle is in front or back
+          const isFront = Math.sin(angle) >= 0;
+
+          if ((pass === 0 && isFront) || (pass === 1 && !isFront)) continue;
+
+          const r = p.radius * diskScale + turbY * diskScale * 0.1;
+          const x = cx + Math.cos(angle) * r;
+          const y = cy + perspectiveY * r;
+
+          // Motion blur effect - stretch horizontally
+          const stretch = 1 + (1 - Math.abs(Math.cos(angle))) * 3;
+
+          // Brightness based on proximity to event horizon
+          const proximity = 1 - (p.radius - 0.28) / 0.35;
+          const brightness = 0.5 + proximity * 0.5;
+
+          ctx.save();
+          ctx.globalAlpha = p.opacity * brightness * (pass === 0 ? 0.9 : 0.35);
+          ctx.translate(x, y);
+          ctx.scale(stretch, 1);
+
+          const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
+          grd.addColorStop(0, `rgba(${p.color.r},${p.color.g},${p.color.b},1)`);
+          grd.addColorStop(0.4, `rgba(${p.color.r},${p.color.g},${p.color.b},0.6)`);
+          grd.addColorStop(1, `rgba(${p.color.r},${p.color.g},${p.color.b},0)`);
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size * 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        }
+      }
+
+      // === Bright inner ring (event horizon edge) ===
+      const ringR = size * 0.175;
+      const ringGrad = ctx.createRadialGradient(cx, cy, ringR - 4, cx, cy, ringR + 8);
+      ringGrad.addColorStop(0, "rgba(255,255,255,0)");
+      ringGrad.addColorStop(0.4, "rgba(200,180,255,0.15)");
+      ringGrad.addColorStop(0.6, "rgba(167,140,255,0.25)");
+      ringGrad.addColorStop(0.8, "rgba(255,255,255,0.3)");
+      ringGrad.addColorStop(1, "rgba(167,140,255,0)");
+      ctx.fillStyle = ringGrad;
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR + 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === Event horizon (black circle) ===
+      const horizonR = size * 0.168;
+      const horizonGrad = ctx.createRadialGradient(cx - horizonR * 0.3, cy - horizonR * 0.3, 0, cx, cy, horizonR);
+      horizonGrad.addColorStop(0, "#000000");
+      horizonGrad.addColorStop(0.7, "#000000");
+      horizonGrad.addColorStop(0.85, "#050510");
+      horizonGrad.addColorStop(0.95, "#0A0A1A");
+      horizonGrad.addColorStop(1, "#000000");
+      ctx.fillStyle = horizonGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, horizonR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // === Sharp event horizon ring ===
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, horizonR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // === Accretion disk overlay (bottom half blocking) ===
+      const overlayGrad = ctx.createRadialGradient(cx, cy, size * 0.12, cx, cy, size * 0.25);
+      overlayGrad.addColorStop(0, "rgba(4,4,11,0)");
+      overlayGrad.addColorStop(0.5, "rgba(4,4,11,0.15)");
+      overlayGrad.addColorStop(0.8, "rgba(4,4,11,0.5)");
+      overlayGrad.addColorStop(1, "rgba(4,4,11,0.9)");
+      ctx.fillStyle = overlayGrad;
+
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + size * 0.02, size * 0.22, size * 0.06, 0, 0, Math.PI);
+      ctx.fill();
+
+      // === Gas filaments (left side jets) ===
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      for (let i = 0; i < 20; i++) {
+        const baseAngle = Math.PI + (Math.random() - 0.5) * 0.5;
+        const len = 0.3 + Math.random() * 0.5;
+        const width = 2 + Math.random() * 6;
+        const wobble = Math.sin(time * 0.5 + i) * 0.1;
+
+        ctx.strokeStyle = i % 3 === 0 ? "rgba(93,143,255,0.3)" :
+                         i % 3 === 1 ? "rgba(122,98,255,0.2)" :
+                                       "rgba(217,79,255,0.15)";
+        ctx.lineWidth = width;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        const endAngle = baseAngle + wobble;
+        const endR = size * (0.18 + len * 0.35);
+        const cpR = size * (0.18 + len * 0.2);
+        const cpAngle = baseAngle - 0.15 + wobble;
+        ctx.quadraticCurveTo(
+          cx + Math.cos(cpAngle) * cpR,
+          cy + Math.sin(cpAngle) * cpR * 0.4,
+          cx + Math.cos(endAngle) * endR,
+          cy + Math.sin(endAngle) * endR * 0.4
+        );
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      animId = requestAnimationFrame(draw);
+    };
+
+    animId = requestAnimationFrame(draw);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(animId);
+    };
+  }, []);
+
   return (
-    <div className="relative flex items-center justify-center">
+    <div className="relative flex items-center justify-center w-full">
       <div
         className="relative"
         style={{
@@ -11,402 +257,10 @@ export default function BlackHole() {
           aspectRatio: "1.4 / 1",
         }}
       >
-        {/* Outer glow layers - z:1 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 1 }}
-        >
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: "65%",
-              paddingBottom: "65%",
-              background: "radial-gradient(circle, rgba(243,184,255,0.06) 0%, transparent 70%)",
-              filter: "blur(80px)",
-            }}
-          />
-        </div>
-
-        {/* Secondary halo - z:2 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 2 }}
-        >
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: "50%",
-              paddingBottom: "50%",
-              boxShadow: "0 0 35px rgba(139,115,255,0.12)",
-              filter: "blur(20px)",
-              border: "20px solid rgba(139,115,255,0.08)",
-              borderRadius: "50%",
-            }}
-          />
-        </div>
-
-        {/* BACK accretion disk (behind black hole) - z:3 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 3 }}
-        >
-          <svg
-            viewBox="0 0 800 400"
-            className="absolute"
-            style={{
-              width: "85%",
-              top: "28%",
-              filter: "blur(2px)",
-              animation: "slowRotate 240s linear infinite",
-            }}
-          >
-            <defs>
-              <linearGradient id="diskBackOuter" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#FF6DA9" stopOpacity="0.08" />
-                <stop offset="25%" stopColor="#D94FFF" stopOpacity="0.12" />
-                <stop offset="50%" stopColor="#7A62FF" stopOpacity="0.18" />
-                <stop offset="75%" stopColor="#5D8FFF" stopOpacity="0.12" />
-                <stop offset="100%" stopColor="#FF6DA9" stopOpacity="0.06" />
-              </linearGradient>
-              <filter id="turbSlow">
-                <feTurbulence type="fractalNoise" baseFrequency="0.008" numOctaves="4" seed="3" />
-                <feDisplacementMap in="SourceGraphic" scale="18" />
-              </filter>
-            </defs>
-            <ellipse
-              cx="400"
-              cy="200"
-              rx="380"
-              ry="110"
-              fill="none"
-              stroke="url(#diskBackOuter)"
-              strokeWidth="30"
-              filter="url(#turbSlow)"
-              opacity="0.6"
-            />
-          </svg>
-        </div>
-
-        {/* Event horizon outer glow - z:4 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 4 }}
-        >
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: "38%",
-              paddingBottom: "38%",
-              boxShadow: [
-                "0 0 35px rgba(94,86,255,0.5)",
-                "0 0 90px rgba(155,91,255,0.4)",
-                "0 0 140px rgba(200,120,255,0.25)",
-              ].join(", "),
-            }}
-          />
-        </div>
-
-        {/* Bright event horizon ring - z:5 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 5 }}
-        >
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: "36%",
-              paddingBottom: "36%",
-              border: "3px solid rgba(255,255,255,0.95)",
-              boxShadow: [
-                "0 0 8px rgba(255,255,255,0.8)",
-                "0 0 25px rgba(167,140,255,0.7)",
-                "0 0 50px rgba(167,140,255,0.3)",
-                "inset 0 0 15px rgba(167,140,255,0.4)",
-              ].join(", "),
-              borderRadius: "50%",
-            }}
-          />
-        </div>
-
-        {/* Core - absolute black #000000 - z:6 */}
-        <div
-          className="absolute flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 6 }}
-        >
-          <div
-            className="rounded-full"
-            style={{
-              width: "clamp(200px, 34vw, 430px)",
-              height: "clamp(200px, 34vw, 430px)",
-              backgroundColor: "#000000",
-              boxShadow: "inset 0 0 80px rgba(0,0,0,0.9)",
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -55%)",
-            }}
-          />
-        </div>
-
-        {/* FRONT accretion disk (passes IN FRONT of black hole) - z:7 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 7 }}
-        >
-          {/* Disk container with slow rotation */}
-          <div
-            className="absolute"
-            style={{
-              width: "85%",
-              top: "24%",
-              animation: "slowRotate 240s linear infinite",
-            }}
-          >
-            <svg
-              viewBox="0 0 800 400"
-              className="w-full"
-              style={{ filter: "blur(1px)" }}
-            >
-              <defs>
-                <linearGradient id="bandOuter" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#FF6DA9" stopOpacity="0.2" />
-                  <stop offset="20%" stopColor="#D94FFF" stopOpacity="0.35" />
-                  <stop offset="40%" stopColor="#865EFF" stopOpacity="0.5" />
-                  <stop offset="55%" stopColor="#5D8FFF" stopOpacity="0.6" />
-                  <stop offset="70%" stopColor="#865EFF" stopOpacity="0.5" />
-                  <stop offset="85%" stopColor="#D94FFF" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#FF6DA9" stopOpacity="0.15" />
-                </linearGradient>
-                <linearGradient id="bandMid" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#D94FFF" stopOpacity="0.25" />
-                  <stop offset="15%" stopColor="#A85EFF" stopOpacity="0.45" />
-                  <stop offset="35%" stopColor="#7A62FF" stopOpacity="0.65" />
-                  <stop offset="50%" stopColor="#5D8FFF" stopOpacity="0.75" />
-                  <stop offset="65%" stopColor="#7A62FF" stopOpacity="0.65" />
-                  <stop offset="80%" stopColor="#A85EFF" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#D94FFF" stopOpacity="0.2" />
-                </linearGradient>
-                <linearGradient id="bandInner" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#A78CFF" stopOpacity="0.15" />
-                  <stop offset="20%" stopColor="#FFFFFF" stopOpacity="0.4" />
-                  <stop offset="40%" stopColor="#5D8FFF" stopOpacity="0.8" />
-                  <stop offset="55%" stopColor="#7A62FF" stopOpacity="0.85" />
-                  <stop offset="70%" stopColor="#5D8FFF" stopOpacity="0.7" />
-                  <stop offset="85%" stopColor="#A78CFF" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#D94FFF" stopOpacity="0.1" />
-                </linearGradient>
-                <linearGradient id="bandCore" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0" />
-                  <stop offset="25%" stopColor="#FFFFFF" stopOpacity="0.5" />
-                  <stop offset="40%" stopColor="#A78CFF" stopOpacity="0.7" />
-                  <stop offset="50%" stopColor="#5D8FFF" stopOpacity="0.8" />
-                  <stop offset="60%" stopColor="#7A62FF" stopOpacity="0.6" />
-                  <stop offset="75%" stopColor="#D94FFF" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-                </linearGradient>
-                <filter id="turbOuter">
-                  <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="4" seed="7" />
-                  <feDisplacementMap in="SourceGraphic" scale="14" />
-                </filter>
-                <filter id="turbMid">
-                  <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="12" />
-                  <feDisplacementMap in="SourceGraphic" scale="10" />
-                </filter>
-                <filter id="turbInner">
-                  <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="3" seed="4" />
-                  <feDisplacementMap in="SourceGraphic" scale="8" />
-                </filter>
-                <filter id="motionBlurH">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="5 1" />
-                </filter>
-                <filter id="motionBlurV">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="1 3" />
-                </filter>
-              </defs>
-
-              {/* Outer turbulent band - slowest */}
-              <ellipse
-                cx="400"
-                cy="200"
-                rx="380"
-                ry="95"
-                fill="none"
-                stroke="url(#bandOuter)"
-                strokeWidth="26"
-                filter="url(#turbOuter)"
-                opacity="0.65"
-              />
-              {/* Mid-outer band */}
-              <ellipse
-                cx="400"
-                cy="200"
-                rx="350"
-                ry="86"
-                fill="none"
-                stroke="url(#bandMid)"
-                strokeWidth="20"
-                filter="url(#turbMid)"
-                opacity="0.75"
-              />
-              {/* Inner band - brightest, most turbulent */}
-              <ellipse
-                cx="400"
-                cy="200"
-                rx="310"
-                ry="74"
-                fill="none"
-                stroke="url(#bandInner)"
-                strokeWidth="16"
-                filter="url(#turbInner)"
-                opacity="0.85"
-              />
-              {/* Core plasma ring - hottest */}
-              <ellipse
-                cx="400"
-                cy="200"
-                rx="275"
-                ry="64"
-                fill="none"
-                stroke="url(#bandCore)"
-                strokeWidth="10"
-                filter="url(#motionBlurH)"
-                opacity="0.7"
-              />
-              {/* Bright inner edge */}
-              <ellipse
-                cx="400"
-                cy="200"
-                rx="260"
-                ry="59"
-                fill="none"
-                stroke="rgba(255,255,255,0.5)"
-                strokeWidth="4"
-                filter="url(#motionBlurV)"
-                opacity="0.5"
-              />
-
-              {/* Turbulence streaks - density variations */}
-              {[0.3, 0.5, 0.7, 0.9].map((offset, i) => (
-                <ellipse
-                  key={`streak-${i}`}
-                  cx="400"
-                  cy="200"
-                  rx={380 - i * 40}
-                  ry={95 - i * 8}
-                  fill="none"
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeWidth={2 + i * 0.5}
-                  strokeDasharray={`${8 + i * 4} ${12 + i * 6}`}
-                  opacity={0.3 - i * 0.05}
-                  filter="url(#motionBlurH)"
-                />
-              ))}
-            </svg>
-          </div>
-        </div>
-
-        {/* Accretion disk overlay - bottom half blocking core - z:8 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 8 }}
-        >
-          <div
-            className="absolute"
-            style={{
-              width: "38%",
-              paddingBottom: "10%",
-              background: "linear-gradient(to bottom, transparent 0%, rgba(4,4,11,0.2) 20%, rgba(4,4,11,0.7) 50%, rgba(4,4,11,0.95) 100%)",
-              bottom: "26%",
-              borderRadius: "50%",
-              filter: "blur(10px)",
-            }}
-          />
-        </div>
-
-        {/* Gas filaments / jets - z:4 */}
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 4 }}
-        >
-          <svg
-            viewBox="0 0 1000 400"
-            className="absolute"
-            style={{
-              width: "120%",
-              top: "26%",
-              filter: "blur(5px)",
-              opacity: 0.25,
-            }}
-          >
-            <defs>
-              <linearGradient id="jetLeft" x1="100%" y1="50%" x2="0%" y2="50%">
-                <stop offset="0%" stopColor="#5D8FFF" stopOpacity="0.5" />
-                <stop offset="30%" stopColor="#865EFF" stopOpacity="0.3" />
-                <stop offset="60%" stopColor="#D94FFF" stopOpacity="0.15" />
-                <stop offset="100%" stopColor="#FF6DA9" stopOpacity="0" />
-              </linearGradient>
-              <filter id="filamentWobble">
-                <feTurbulence type="fractalNoise" baseFrequency="0.005" numOctaves="2" seed="9" />
-                <feDisplacementMap in="SourceGraphic" scale="25" />
-              </filter>
-            </defs>
-
-            {/* Left filaments - major jets */}
-            <path
-              d="M 550 200 Q 400 150 250 170 Q 150 185 60 160 Q 20 150 10 140"
-              fill="none"
-              stroke="url(#jetLeft)"
-              strokeWidth="16"
-              strokeLinecap="round"
-              filter="url(#filamentWobble)"
-            />
-            <path
-              d="M 520 210 Q 380 230 220 210 Q 130 195 50 220 Q 20 230 5 225"
-              fill="none"
-              stroke="url(#jetLeft)"
-              strokeWidth="10"
-              strokeLinecap="round"
-              filter="url(#filamentWobble)"
-              opacity="0.6"
-            />
-            <path
-              d="M 540 195 Q 420 170 280 190 Q 180 205 80 180 Q 30 170 0 165"
-              fill="none"
-              stroke="url(#jetLeft)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              opacity="0.4"
-            />
-
-            {/* Right filaments - fainter */}
-            <path
-              d="M 500 200 Q 650 185 780 200 Q 880 210 950 195"
-              fill="none"
-              stroke="#5D8FFF"
-              strokeWidth="8"
-              strokeLinecap="round"
-              opacity="0.12"
-            />
-            <path
-              d="M 510 205 Q 630 220 760 205 Q 860 195 940 210"
-              fill="none"
-              stroke="#865EFF"
-              strokeWidth="5"
-              strokeLinecap="round"
-              opacity="0.08"
-            />
-
-            {/* Small density ripples */}
-            <path
-              d="M 520 190 Q 460 185 400 195 Q 340 205 280 195"
-              fill="none"
-              stroke="rgba(167,140,255,0.15)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              opacity="0.3"
-            />
-          </svg>
-        </div>
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+        />
       </div>
     </div>
   );
