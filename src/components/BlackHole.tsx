@@ -1,247 +1,433 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass";
+import { CopyShader } from "three/examples/jsm/shaders/CopyShader";
+
+const vertexShader = [
+  "void main() {",
+  "  gl_Position = vec4(position, 1.0);",
+  "}",
+].join("\n");
+
+const TEXTURE_BASE = "/juandelsoldato.github.io/textures/";
+
+const fragmentShader = [
+  "#define PI 3.141592653589793238462643383279",
+  "#define DEG_TO_RAD (PI/180.0)",
+  "#define ROT_Y(a) mat3(1, 0, 0, 0, cos(a), sin(a), 0, -sin(a), cos(a))",
+  "#define ROT_Z(a) mat3(cos(a), -sin(a), 0, sin(a), cos(a), 0, 0, 0, 1)",
+  "",
+  "uniform float time;",
+  "uniform vec2 resolution;",
+  "",
+  "uniform vec3 cam_pos;",
+  "uniform vec3 cam_dir;",
+  "uniform vec3 cam_up;",
+  "uniform float fov;",
+  "uniform vec3 cam_vel;",
+  "",
+  "const float MIN_TEMPERATURE = 1000.0;",
+  "const float TEMPERATURE_RANGE = 39000.0;",
+  "",
+  "uniform bool accretion_disk;",
+  "uniform bool use_disk_texture;",
+  "const float DISK_IN = 2.0;",
+  "const float DISK_WIDTH = 4.0;",
+  "",
+  "uniform bool doppler_shift;",
+  "uniform bool lorentz_transform;",
+  "uniform bool beaming;",
+  "",
+  "uniform sampler2D bg_texture;",
+  "uniform sampler2D star_texture;",
+  "uniform sampler2D disk_texture;",
+  "",
+  "vec2 square_frame(vec2 screen_size){",
+  "  vec2 position = 2.0 * (gl_FragCoord.xy / screen_size.xy) - 1.0;",
+  "  return position;",
+  "}",
+  "",
+  "vec2 to_spherical(vec3 cartesian_coord){",
+  "  vec2 uv = vec2(atan(cartesian_coord.z,cartesian_coord.x), asin(cartesian_coord.y));",
+  "  uv *= vec2(1.0/(2.0*PI), 1.0/PI);",
+  "  uv += 0.5;",
+  "  return uv;",
+  "}",
+  "",
+  "vec3 lorentz_transform_velocity(vec3 u, vec3 v){",
+  "  float speed = length(v);",
+  "  if (speed > 0.0){",
+  "    float gamma = 1.0/sqrt(1.0-dot(v,v));",
+  "    float denominator = 1.0 - dot(v,u);",
+  "    vec3 new_u = (u/gamma - v + (gamma/(gamma+1.0)) * dot(u,v)*v)/denominator;",
+  "    return new_u;",
+  "  }",
+  "  return u;",
+  "}",
+  "",
+  "vec3 temp_to_color(float temp_kelvin){",
+  "  vec3 color;",
+  "  temp_kelvin = clamp(temp_kelvin, 1000.0, 40000.0) / 100.0;",
+  "  if (temp_kelvin <= 66.0){",
+  "    color.r = 255.0;",
+  "    color.g = temp_kelvin;",
+  "    color.g = 99.4708025861 * log(color.g) - 161.1195681661;",
+  "    if (color.g < 0.0) color.g = 0.0;",
+  "    if (color.g > 255.0)  color.g = 255.0;",
+  "  } else {",
+  "    color.r = temp_kelvin - 60.0;",
+  "    if (color.r < 0.0) color.r = 0.0;",
+  "    color.r = 329.698727446 * pow(color.r, -0.1332047592);",
+  "    if (color.r < 0.0) color.r = 0.0;",
+  "    if (color.g > 255.0) color.r = 255.0;",
+  "    color.g = temp_kelvin - 60.0;",
+  "    if (color.g < 0.0) color.g = 0.0;",
+  "    color.g = 288.1221695283 * pow(color.g, -0.0755148492);",
+  "    if (color.g > 255.0)  color.g = 255.0;",
+  "  }",
+  "  if (temp_kelvin >= 66.0){",
+  "    color.b = 255.0;",
+  "  } else if (temp_kelvin <= 19.0){",
+  "    color.b = 0.0;",
+  "  } else {",
+  "    color.b = temp_kelvin - 10.0;",
+  "    color.b = 138.5177312231 * log(color.b) - 305.0447927307;",
+  "    if (color.b < 0.0) color.b = 0.0;",
+  "    if (color.b > 255.0) color.b = 255.0;",
+  "  }",
+  "  color /= 255.0;",
+  "  return color;",
+  "}",
+  "",
+  'void main() {',
+  "  float uvfov = tan(fov / 2.0 * DEG_TO_RAD);",
+  "  vec2 uv = square_frame(resolution);",
+  "  uv *= vec2(resolution.x/resolution.y, 1.0);",
+  "  vec3 forward = normalize(cam_dir);",
+  "  vec3 up = normalize(cam_up);",
+  "  vec3 nright = normalize(cross(forward, up));",
+  "  up = cross(nright, forward);",
+  "  vec3 pixel_pos = cam_pos + forward + nright*uv.x*uvfov + up*uv.y*uvfov;",
+  "  vec3 ray_dir = normalize(pixel_pos - cam_pos);",
+  "",
+  "  if (lorentz_transform)",
+  "    ray_dir = lorentz_transform_velocity(ray_dir, cam_vel);",
+  "",
+  "  vec4 color = vec4(0.0,0.0,0.0,1.0);",
+  "",
+  "  vec3 point = cam_pos;",
+  "  vec3 velocity = ray_dir;",
+  "  vec3 c = cross(point,velocity);",
+  "  float h2 = dot(c,c);",
+  "",
+  "  float ray_gamma = 1.0/sqrt(1.0-dot(cam_vel,cam_vel));",
+  "  float ray_doppler_factor = ray_gamma * (1.0 + dot(ray_dir, -cam_vel));",
+  "",
+  "  float ray_intensity = 1.0;",
+  "  if (beaming)",
+  "    ray_intensity /= pow(ray_doppler_factor, 3.0);",
+  "",
+  "  vec3 oldpoint;",
+  "  float pointsqr;",
+  "  float distance = length(point);",
+  "",
+  "  for (int i=0; i<NSTEPS; i++){",
+  "    oldpoint = point;",
+  "    point += velocity * STEP;",
+  "    vec3 accel = -1.5 * h2 * point / pow(dot(point,point),2.5);",
+  "    velocity += accel * STEP;",
+  "    distance = length(point);",
+  "    if (distance < 0.0) break;",
+  "    bool horizon_mask = distance < 1.0 && length(oldpoint) > 1.0;",
+  "    if (horizon_mask) {",
+  "      vec4 black = vec4(0.0,0.0,0.0,1.0);",
+  "      color += black;",
+  "      break;",
+  "    }",
+  "    if (accretion_disk){",
+  "      if (oldpoint.y * point.y < 0.0){",
+  "        float lambda = -oldpoint.y/velocity.y;",
+  "        vec3 intersection = oldpoint + lambda*velocity;",
+  "        float r = length(intersection);",
+  "        if (DISK_IN <= r && r <= DISK_IN+DISK_WIDTH ){",
+  "          float phi = atan(intersection.x, intersection.z);",
+  "          vec3 disk_velocity = vec3(-intersection.x, 0.0, intersection.z)/sqrt(2.0*(r-1.0))/(r*r);",
+  "          phi -= time;",
+  "          phi = mod(phi, PI*2.0);",
+  "          float disk_gamma = 1.0/sqrt(1.0-dot(disk_velocity, disk_velocity));",
+  "          float disk_doppler_factor = disk_gamma*(1.0+dot(ray_dir/distance, disk_velocity));",
+  "          if (use_disk_texture){",
+  "            vec2 tex_coord = vec2(mod(phi,2.0*PI)/(2.0*PI),1.0-(r-DISK_IN)/(DISK_WIDTH));",
+  "            vec4 disk_color = texture2D(disk_texture, tex_coord) / (ray_doppler_factor * disk_doppler_factor);",
+  "            float disk_alpha = clamp(dot(disk_color,disk_color)/4.5,0.0,1.0);",
+  "            if (beaming)",
+  "              disk_alpha /= pow(disk_doppler_factor,3.0);",
+  "            color += vec4(disk_color)*disk_alpha;",
+  "          } else {",
+  "            float disk_temperature = 10000.0*(pow(r/DISK_IN, -3.0/4.0));",
+  "            if (doppler_shift)",
+  "              disk_temperature /= ray_doppler_factor*disk_doppler_factor;",
+  "            vec3 disk_color = temp_to_color(disk_temperature);",
+  "            float disk_alpha = clamp(dot(disk_color,disk_color)/3.0,0.0,1.0);",
+  "            if (beaming)",
+  "              disk_alpha /= pow(disk_doppler_factor,3.0);",
+  "            color += vec4(disk_color, 1.0)*disk_alpha;",
+  "          }",
+  "        }",
+  "      }",
+  "    }",
+  "  }",
+  "",
+  "  if (distance > 1.0){",
+  "    ray_dir = normalize(point - oldpoint);",
+  "    vec2 tex_coord = to_spherical(ray_dir * ROT_Z(45.0 * DEG_TO_RAD));",
+  "    vec4 star_color = texture2D(star_texture, tex_coord);",
+  "    if (star_color.g > 0.0){",
+  "      float star_temperature = (MIN_TEMPERATURE + TEMPERATURE_RANGE*star_color.r);",
+  "      float star_velocity = star_color.b - 0.5;",
+  "      float star_doppler_factor = sqrt((1.0+star_velocity)/(1.0-star_velocity));",
+  "      if (doppler_shift)",
+  "        star_temperature /= ray_doppler_factor*star_doppler_factor;",
+  "      color += vec4(temp_to_color(star_temperature),1.0)* star_color.g;",
+  "    }",
+  "    color += texture2D(bg_texture, tex_coord) * 0.25;",
+  "  }",
+  "  gl_FragColor = color*ray_intensity;",
+  "}",
+].join("\n");
 
 export default function BlackHole() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const mount = mountRef.current;
+    if (!mount) return;
 
-    let animId: number;
-    let time = 0;
+    let cleanup: (() => void) | undefined;
 
-    const resize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      const rect = parent.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    };
+    const init = async () => {
+      const w = mount.clientWidth;
+      const h = mount.clientHeight;
 
-    resize();
-    window.addEventListener("resize", resize);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setClearColor(0x03030a, 1);
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      mount.appendChild(renderer.domElement);
 
-    const draw = (timestamp: number) => {
-      time = timestamp / 2000;
-      const w = canvas.width;
-      const h = canvas.height;
-      const cx = w / 2;
-      const cy = h * 0.45;
-      const sz = Math.min(w, h);
+      const scene = new THREE.Scene();
+      const dummyCam = new THREE.Camera();
+      dummyCam.position.z = 1;
 
-      ctx.clearRect(0, 0, w, h);
+      const composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, dummyCam));
+      const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(w, h),
+        0.6,
+        2.0,
+        0.0
+      );
+      composer.addPass(bloomPass);
+      const copyPass = new ShaderPass(CopyShader);
+      copyPass.renderToScreen = true;
+      composer.addPass(copyPass);
 
-      // === Outer atmospheric glow ===
-      const outerGrad = ctx.createRadialGradient(cx, cy, sz * 0.05, cx, cy, sz * 0.5);
-      outerGrad.addColorStop(0, "rgba(90,80,255,0.03)");
-      outerGrad.addColorStop(0.3, "rgba(140,90,255,0.02)");
-      outerGrad.addColorStop(1, "transparent");
-      ctx.fillStyle = outerGrad;
-      ctx.fillRect(0, 0, w, h);
+      const loader = new THREE.TextureLoader();
 
-      // === Event horizon glow layers ===
-      for (let i = 3; i >= 0; i--) {
-        const r = sz * (0.168 + i * 0.015);
-        const alpha = [0.08, 0.05, 0.03, 0.01][i];
-        const grad = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r);
-        grad.addColorStop(0, `rgba(167,140,255,${alpha})`);
-        grad.addColorStop(0.6, `rgba(94,86,255,${alpha * 0.5})`);
-        grad.addColorStop(1, "transparent");
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      const loadTex = (
+        name: string,
+        filter: THREE.MagnificationTextureFilter | THREE.MinificationTextureFilter
+      ): Promise<THREE.Texture> =>
+        new Promise((resolve) => {
+          const tex = loader.load(TEXTURE_BASE + name, () => resolve(tex));
+          tex.magFilter = filter as THREE.MagnificationTextureFilter;
+          tex.minFilter = filter as THREE.MinificationTextureFilter;
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+        });
 
-      // === Accretion disk - back half (behind black hole) ===
-      // The disk is drawn as layered elliptical bands
-      const diskCx = cx;
-      const diskCy = cy;
-      const bandCount = 40;
-      const innerR = sz * 0.175;
-      const outerR = sz * 0.48;
+      const [bgTexture, starTexture, diskTexture] = await Promise.all([
+        loadTex("milkyway.jpg", THREE.NearestFilter),
+        loadTex("star_noise.png", THREE.LinearFilter),
+        loadTex("accretion_disk.png", THREE.LinearFilter),
+      ]);
 
-      const colors = [
-        [255, 255, 255],    // white
-        [200, 180, 255],    // lavender
-        [93, 143, 255],     // electric blue
-        [122, 98, 255],     // violet
-        [217, 79, 255],     // magenta
-        [255, 114, 169],    // pink
-        [255, 180, 130],    // soft orange
-      ];
+      let animId: number;
+      let lastTime = performance.now();
+      let theta = 0;
+      let ow = 0;
+      const ORBIT_R = 8;
+      const INC = -5 * Math.PI / 180;
+      const MAX_W =
+        1 / Math.sqrt(2.0 * (ORBIT_R - 1.0)) / ORBIT_R;
 
-      // Draw back half (y above center in the original orientation)
-      // In our coordinate system, we compress Y to create perspective
-      for (let pass = 0; pass < 2; pass++) {
-        const isBack = pass === 0;
-        ctx.save();
+      const uniforms = {
+        time: { value: 0.0 },
+        resolution: { value: new THREE.Vector2(w, h) },
+        cam_pos: { value: new THREE.Vector3() },
+        cam_dir: { value: new THREE.Vector3() },
+        cam_up: { value: new THREE.Vector3() },
+        cam_vel: { value: new THREE.Vector3() },
+        fov: { value: 60.0 },
+        accretion_disk: { value: true },
+        use_disk_texture: { value: true },
+        lorentz_transform: { value: true },
+        doppler_shift: { value: true },
+        beaming: { value: true },
+        bg_texture: { value: bgTexture },
+        star_texture: { value: starTexture },
+        disk_texture: { value: diskTexture },
+      };
 
-        for (let b = 0; b < bandCount; b++) {
-          const t = b / bandCount;
-          const radius = innerR + t * (outerR - innerR);
-          const bandWidth = (outerR - innerR) / bandCount * 1.8;
+      const defines = "#define STEP 0.05\n#define NSTEPS 600\n";
+      const material = new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader,
+        fragmentShader: defines + fragmentShader,
+      });
 
-          // Color interpolation
-          const ci = t * (colors.length - 1);
-          const cIdx = Math.floor(ci);
-          const cMix = ci - cIdx;
-          const c1 = colors[Math.min(cIdx, colors.length - 1)];
-          const c2 = colors[Math.min(cIdx + 1, colors.length - 1)];
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2),
+        material
+      );
+      scene.add(mesh);
 
-          const r = Math.round(c1[0] + (c2[0] - c1[0]) * cMix);
-          const g = Math.round(c1[1] + (c2[1] - c1[1]) * cMix);
-          const bl = Math.round(c1[2] + (c2[2] - c1[2]) * cMix);
+      let isDragging = false;
+      let lastMX = 0;
+      let lastMY = 0;
+      let pitch = 0;
+      let yaw = 0;
+      let ox = 0;
+      let oy = 0;
 
-          // Brightness falls off toward outer edge and peaks at inner
-          const brightness = 1 - t * 0.4;
-          const innerGlow = Math.max(0, 1 - t * 2) * 0.5;
+      const onDown = (e: MouseEvent) => {
+        isDragging = true;
+        lastMX = e.clientX;
+        lastMY = e.clientY;
+      };
+      const onMove = (e: MouseEvent) => {
+        if (!isDragging) return;
+        ox += e.clientX - lastMX;
+        oy += e.clientY - lastMY;
+        lastMX = e.clientX;
+        lastMY = e.clientY;
+      };
+      const onUp = () => {
+        isDragging = false;
+      };
 
-          // Turbulence displacement
-          const turbX = Math.sin(time * (0.3 + t * 0.5) + b * 0.5) * 3;
-          const turbY = Math.cos(time * (0.2 + t * 0.3) + b * 0.7) * 2;
+      renderer.domElement.addEventListener("mousedown", onDown);
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
 
-          // Y compression for perspective
-          const yScale = 0.28 + t * 0.15 + 0.03 * Math.sin(time + b);
+      const onResize = () => {
+        const nw = mount.clientWidth;
+        const nh = mount.clientHeight;
+        if (nw === 0 || nh === 0) return;
+        renderer.setSize(nw, nh);
+        composer.setSize(nw, nh);
+        uniforms.resolution.value.set(nw, nh);
+      };
+      window.addEventListener("resize", onResize);
 
-          // Draw the band as a partial ellipse (front or back half)
-          ctx.beginPath();
+      const loop = (now: number) => {
+        const delta = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
 
-          const segments = 60;
-          const startAngle = isBack ? 0 : Math.PI;
-          const endAngle = isBack ? Math.PI : Math.PI * 2;
+        if (ow < MAX_W) ow += delta / ORBIT_R;
+        else ow = MAX_W;
+        theta += ow * delta;
 
-          for (let s = 0; s <= segments; s++) {
-            const angle = startAngle + (endAngle - startAngle) * (s / segments);
-            const px = diskCx + (radius + turbX) * Math.cos(angle);
-            const py = diskCy + (radius * yScale + turbY) * Math.sin(angle);
+        const cos = Math.cos(theta);
+        const sin = Math.sin(theta);
+        const pos = new THREE.Vector3(
+          ORBIT_R * sin,
+          0,
+          ORBIT_R * cos
+        );
+        const vel = new THREE.Vector3(
+          cos * ow,
+          0,
+          -sin * ow
+        );
+        const incMat = new THREE.Matrix4().makeRotationX(INC);
+        pos.applyMatrix4(incMat);
+        vel.applyMatrix4(incMat);
 
-            if (s === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.closePath();
+        yaw += ox * 0.003;
+        ox *= 0.85;
+        pitch += oy * 0.003;
+        pitch = Math.max(
+          -Math.PI / 2.1,
+          Math.min(Math.PI / 2.1, pitch)
+        );
+        oy *= 0.85;
 
-          const alpha = (0.15 + t * 0.4) * brightness * (isBack ? 0.35 : 0.85) + innerGlow;
-          const r2 = Math.min(255, r + 50 * innerGlow);
-          const g2 = Math.min(255, g + 30 * innerGlow);
-          const bl2 = Math.min(255, bl + 30 * innerGlow);
+        const toward = new THREE.Vector3()
+          .copy(pos)
+          .negate()
+          .normalize();
+        const right = new THREE.Vector3()
+          .crossVectors(toward, new THREE.Vector3(0, 1, 0))
+          .normalize();
+        const up = new THREE.Vector3().crossVectors(
+          right,
+          toward
+        );
+        const dir = new THREE.Vector3()
+          .copy(toward)
+          .applyAxisAngle(right, pitch)
+          .applyAxisAngle(up, yaw);
 
-          ctx.fillStyle = `rgba(${r2},${g2},${bl2},${alpha})`;
-          ctx.fill();
+        uniforms.time.value = now / 1000;
+        uniforms.cam_pos.value.copy(pos);
+        uniforms.cam_vel.value.copy(vel);
+        uniforms.cam_dir.value.copy(dir);
+        uniforms.cam_up.value.copy(up);
+
+        composer.render();
+        animId = requestAnimationFrame(loop);
+      };
+
+      animId = requestAnimationFrame(loop);
+
+      cleanup = () => {
+        cancelAnimationFrame(animId);
+        renderer.domElement.removeEventListener("mousedown", onDown);
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        window.removeEventListener("resize", onResize);
+        if (mount.contains(renderer.domElement)) {
+          mount.removeChild(renderer.domElement);
         }
-        ctx.restore();
-      }
-
-      // === Bright accretion ring (just outside event horizon) ===
-      const ringR = sz * 0.175;
-      const ringGrad = ctx.createRadialGradient(cx, cy, ringR - 3, cx, cy, ringR + 12);
-      ringGrad.addColorStop(0, "rgba(255,255,255,0)");
-      ringGrad.addColorStop(0.3, "rgba(200,180,255,0.1)");
-      ringGrad.addColorStop(0.5, "rgba(167,140,255,0.18)");
-      ringGrad.addColorStop(0.7, "rgba(255,255,255,0.22)");
-      ringGrad.addColorStop(0.85, "rgba(167,140,255,0.1)");
-      ringGrad.addColorStop(1, "rgba(167,140,255,0)");
-      ctx.fillStyle = ringGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, ringR + 12, 0, Math.PI * 2);
-      ctx.fill();
-
-      // === Event horizon (black circle) ===
-      const horR = sz * 0.168;
-      const horGrad = ctx.createRadialGradient(cx - horR * 0.2, cy - horR * 0.2, 0, cx, cy, horR);
-      horGrad.addColorStop(0, "#000000");
-      horGrad.addColorStop(0.8, "#000000");
-      horGrad.addColorStop(0.92, "#030308");
-      horGrad.addColorStop(0.97, "#080818");
-      horGrad.addColorStop(1, "#000000");
-      ctx.fillStyle = horGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, horR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // === Sharp event horizon edge ring ===
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, horR, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // === Bottom overlay (front disk covers bottom of black hole) ===
-      const overlayGrad = ctx.createRadialGradient(cx, cy + sz * 0.02, sz * 0.1, cx, cy + sz * 0.02, sz * 0.28);
-      overlayGrad.addColorStop(0, "rgba(4,4,11,0)");
-      overlayGrad.addColorStop(0.3, "rgba(4,4,11,0.1)");
-      overlayGrad.addColorStop(0.6, "rgba(4,4,11,0.4)");
-      overlayGrad.addColorStop(0.85, "rgba(4,4,11,0.7)");
-      overlayGrad.addColorStop(1, "rgba(4,4,11,0.95)");
-      ctx.fillStyle = overlayGrad;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + sz * 0.015, sz * 0.25, sz * 0.07, 0, 0, Math.PI);
-      ctx.fill();
-
-      // === Gas filaments (left, leading) ===
-      ctx.save();
-      for (let i = 0; i < 25; i++) {
-        const baseAngle = Math.PI + (Math.random() - 0.5) * 0.8;
-        const len = 0.2 + Math.random() * 0.6;
-        const width = 1.5 + Math.random() * 5;
-        const wobble = Math.sin(time * 0.4 + i * 0.7) * 0.15 + Math.sin(time * 0.7 + i * 1.1) * 0.08;
-
-        const alpha = 0.05 + Math.random() * 0.1;
-        const col = i % 3 === 0 ? `rgba(93,143,255,${alpha})` :
-                    i % 3 === 1 ? `rgba(122,98,255,${alpha})` :
-                                  `rgba(217,79,255,${alpha * 0.7})`;
-
-        ctx.strokeStyle = col;
-        ctx.lineWidth = width;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-
-        const startR = sz * 0.16 + Math.random() * sz * 0.04;
-        const startAngle = baseAngle + wobble * 0.5;
-        const cpR = startR + len * sz * 0.25;
-        const endR = startR + len * sz * 0.45;
-        const endAngle = baseAngle + wobble;
-
-        const sx = cx + Math.cos(startAngle) * startR;
-        const sy = cy + Math.sin(startAngle) * startR * 0.35;
-        const cpx = cx + Math.cos(baseAngle - 0.1 + wobble) * cpR;
-        const cpy = cy + Math.sin(baseAngle - 0.1 + wobble) * cpR * 0.35;
-        const ex = cx + Math.cos(endAngle) * endR;
-        const ey = cy + Math.sin(endAngle) * endR * 0.35;
-
-        ctx.moveTo(sx, sy);
-        ctx.quadraticCurveTo(cpx, cpy, ex, ey);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      animId = requestAnimationFrame(draw);
+        renderer.dispose();
+      };
     };
 
-    animId = requestAnimationFrame(draw);
+    init().catch(console.error);
 
     return () => {
-      window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animId);
+      cleanup?.();
     };
   }, []);
 
   return (
-    <div className="relative flex items-center justify-center w-full">
+    <div className="relative flex items-center justify-center w-full pointer-events-none">
       <div
-        className="relative"
+        className="relative pointer-events-auto"
         style={{
           width: "70vw",
           maxWidth: 900,
           aspectRatio: "1.4 / 1",
         }}
       >
-        <canvas
-          ref={canvasRef}
+        <div
+          ref={mountRef}
           className="absolute inset-0 w-full h-full"
         />
       </div>

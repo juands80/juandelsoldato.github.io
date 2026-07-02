@@ -1,9 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import Stars from "./Stars";
 import Planets from "./Planets";
-import BlackHole from "./BlackHole";
+
+const BlackHole = dynamic(() => import("./BlackHole"), { ssr: false });
 
 export default function Hero() {
   return (
