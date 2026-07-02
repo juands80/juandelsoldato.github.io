@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import Stars from "./Stars";
-import Planets from "./Planets";
 
 const BlackHole = dynamic(() => import("./BlackHole"), { ssr: false });
 
@@ -45,11 +44,6 @@ export default function Hero() {
       {/* Stars */}
       <div style={{ zIndex: 2, position: "relative" }}>
         <Stars />
-      </div>
-
-      {/* Planets */}
-      <div style={{ zIndex: 3, position: "relative" }}>
-        <Planets />
       </div>
 
       {/* Content wrapper */}
