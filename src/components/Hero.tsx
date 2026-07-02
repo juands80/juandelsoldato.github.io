@@ -19,10 +19,15 @@ export default function Hero() {
         ].join(", "),
       }}
     >
-      {/* Nebulas */}
+      {/* Black Hole Background */}
+      <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+        <BlackHole />
+      </div>
+
+      {/* Nebulas overlay */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ zIndex: 0 }}
+        style={{ zIndex: 1 }}
       >
         <div
           className="absolute w-full h-full"
@@ -38,27 +43,20 @@ export default function Hero() {
       </div>
 
       {/* Stars */}
-      <Stars />
+      <div style={{ zIndex: 2, position: "relative" }}>
+        <Stars />
+      </div>
 
       {/* Planets */}
-      <Planets />
+      <div style={{ zIndex: 3, position: "relative" }}>
+        <Planets />
+      </div>
 
       {/* Content wrapper */}
       <div
         className="relative flex flex-col items-center w-full"
         style={{ zIndex: 10, marginTop: 84 }}
       >
-        {/* Black Hole */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-          className="w-full flex justify-center"
-          style={{ marginBottom: "calc(55px - 2vw)" }}
-        >
-          <BlackHole />
-        </motion.div>
-
         {/* Badge */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
