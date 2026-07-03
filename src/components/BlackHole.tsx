@@ -444,7 +444,7 @@ export default function BlackHole() {
           const innerR = u.diskInnerRadius;
           const outerR = u.diskOuterRadius;
 
-          Loop(32, () => {
+          Loop(16, () => {
             If(
               escaped
                 .greaterThan(0.5)
@@ -559,7 +559,7 @@ export default function BlackHole() {
         });
         renderer.setSize(mount.clientWidth, mount.clientHeight);
         renderer.setPixelRatio(
-          Math.min(window.devicePixelRatio, 2)
+          Math.min(window.devicePixelRatio, 1)
         );
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         mount.appendChild(renderer.domElement);
@@ -567,7 +567,6 @@ export default function BlackHole() {
         // Auto-orbit: slowly rotate camera around
         let angle = 0;
         const orbitRadius = 18;
-        const autoOrbitSpeed = 0.05;
 
         // Create black hole mesh
         const geometry = new THREE.SphereGeometry(100, 32, 32);
@@ -585,10 +584,14 @@ export default function BlackHole() {
         let postProcessing: any = null;
         let lastFrameTime = performance.now();
         let stopped = false;
+        let currentStepSize = config.stepSize;
 
-        function updateCamera() {
-          // Auto-orbit around black hole
-          angle += 0.002;
+        // Performance monitoring
+        const frameBudgets: number[] = [];
+        let qualityReduced = false;
+
+        function updateCamera(deltaTime: number) {
+          angle += deltaTime * 0.12;
           const cx = Math.sin(angle) * orbitRadius;
           const cz = Math.cos(angle) * orbitRadius;
           camera.position.set(cx, -2, cz);
@@ -613,8 +616,22 @@ export default function BlackHole() {
           );
           lastFrameTime = currentTime;
 
+          // Adaptive quality: if FPS < 30 for 2s, increase stepSize
+          if (!qualityReduced && deltaTime > 0) {
+            frameBudgets.push(deltaTime);
+            if (frameBudgets.length >= 60) {
+              const avgMs = frameBudgets.reduce((a, b) => a + b) / frameBudgets.length * 1000;
+              frameBudgets.length = 0;
+              if (avgMs > 33) {
+                qualityReduced = true;
+                currentStepSize = 1.5;
+                u.stepSize.value = currentStepSize;
+              }
+            }
+          }
+
           u.time.value += deltaTime;
-          updateCamera();
+          updateCamera(deltaTime);
 
           if (postProcessing) {
             postProcessing.render();
