@@ -444,7 +444,7 @@ export default function BlackHole() {
           const innerR = u.diskInnerRadius;
           const outerR = u.diskOuterRadius;
 
-          Loop(16, () => {
+          Loop(24, () => {
             If(
               escaped
                 .greaterThan(0.5)
