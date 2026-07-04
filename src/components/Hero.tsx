@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import Stars from "./Stars";
 
@@ -17,15 +16,15 @@ export default function Hero() {
       }}
     >
       {/* Background image */}
-      <div className="absolute inset-0" style={{ zIndex: 0 }}>
-        <Image
-          src="/firewatch.png"
-          alt="Night landscape with firewatch tower, pine forest, mountains and Milky Way"
-          fill
-          className="object-cover"
-          unoptimized
-        />
-      </div>
+      <div
+        className="absolute inset-0"
+        style={{
+          zIndex: 0,
+          backgroundImage: "url(/juandelsoldato.github.io/firewatch.png)",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
 
       {/* Nebulas overlay */}
       <div
