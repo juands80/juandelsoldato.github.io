@@ -1,10 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import Stars from "./Stars";
-
-const BlackHole = dynamic(() => import("./BlackHole"), { ssr: false });
 
 export default function Hero() {
   return (
@@ -18,9 +16,15 @@ export default function Hero() {
         ].join(", "),
       }}
     >
-      {/* Black Hole Background */}
-      <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-        <BlackHole />
+      {/* Background image */}
+      <div className="absolute inset-0" style={{ zIndex: 0 }}>
+        <Image
+          src="/firewatch.png"
+          alt="Night landscape with firewatch tower, pine forest, mountains and Milky Way"
+          fill
+          className="object-cover"
+          unoptimized
+        />
       </div>
 
       {/* Nebulas overlay */}
