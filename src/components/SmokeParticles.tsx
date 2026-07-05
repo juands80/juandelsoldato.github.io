@@ -11,7 +11,6 @@ interface Particle {
   x: number;
   y: number;
   size: number;
-  opacity: number;
   speedY: number;
   speedX: number;
   windDrift: number;
@@ -37,8 +36,24 @@ export default function SmokeParticles() {
       canvas.height = rect.height;
     };
     resize();
-
     mount.appendChild(canvas);
+
+    // Pre-rendered smoke bubble texture (avoids blur filter per frame)
+    const texSize = 64;
+    const texCanvas = document.createElement("canvas");
+    texCanvas.width = texSize;
+    texCanvas.height = texSize;
+    const texCtx = texCanvas.getContext("2d")!;
+    const grad = texCtx.createRadialGradient(
+      texSize / 2, texSize / 2, 0,
+      texSize / 2, texSize / 2, texSize / 2
+    );
+    grad.addColorStop(0, "rgba(237,232,222,1)");
+    grad.addColorStop(0.15, "rgba(237,232,222,0.5)");
+    grad.addColorStop(0.4, "rgba(237,232,222,0.15)");
+    grad.addColorStop(1, "rgba(237,232,222,0)");
+    texCtx.fillStyle = grad;
+    texCtx.fillRect(0, 0, texSize, texSize);
 
     const origin = () => {
       const rect = mount.parentElement?.getBoundingClientRect();
@@ -49,12 +64,11 @@ export default function SmokeParticles() {
       return {
         x: (rect.width - imgW) / 2 + CHIMNEY_X * s,
         y: (rect.height - imgH) / 2 + CHIMNEY_Y * s,
-        s,
       };
     };
 
     const particles: Particle[] = [];
-    const MAX_PARTICLES = 140;
+    const MAX_PARTICLES = 80;
     let frameId: number;
 
     const spawn = () => {
@@ -64,7 +78,6 @@ export default function SmokeParticles() {
         x: o.x + (Math.random() - 0.5) * 2,
         y: o.y,
         size: 0.75 + Math.random() * 1,
-        opacity: 0.2 + Math.random() * 0.25,
         speedY: -(0.375 + Math.random() * 0.3),
         speedX: (Math.random() - 0.5) * 0.1,
         windDrift: 0.03 + Math.random() * 0.04,
@@ -76,7 +89,9 @@ export default function SmokeParticles() {
     const draw = () => {
       ctx!.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (Math.random() < 0.7) spawn();
+      if (Math.random() < 0.5) spawn();
+
+      const halfTex = texSize / 2;
 
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -92,25 +107,20 @@ export default function SmokeParticles() {
         p.y += p.speedY;
         p.speedY *= 0.999;
         p.x += p.speedX + p.windDrift * lifeRatio;
-        p.        size += 0.003;
+        p.size += 0.003;
 
         const fadeOut = 1 - lifeRatio;
         const fadeIn = Math.min(lifeRatio * 5, 1);
-        const alpha = p.opacity * fadeOut * fadeIn;
+        const alpha = fadeOut * fadeIn;
+
+        if (alpha < 0.01) continue;
 
         ctx!.globalAlpha = alpha;
-        ctx!.fillStyle = "#EDE8DE";
+        const s = p.size * 3;
 
-        ctx!.beginPath();
-        ctx!.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx!.fill();
-
-        ctx!.globalAlpha = alpha * 0.3;
-        ctx!.filter = "blur(6px)";
-        ctx!.beginPath();
-        ctx!.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.filter = "none";
+        if (s > 1) {
+          ctx!.drawImage(texCanvas, p.x - s, p.y - s, s * 2, s * 2);
+        }
       }
 
       ctx!.globalAlpha = 1;
