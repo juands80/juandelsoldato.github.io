@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Stars from "./Stars";
+import SmokeParticles from "./SmokeParticles";
 
 export default function Hero() {
   return (
@@ -48,6 +49,9 @@ export default function Hero() {
       <div style={{ zIndex: 2, position: "relative" }}>
         <Stars />
       </div>
+
+      {/* Chimney smoke */}
+      <SmokeParticles />
 
       {/* Content wrapper */}
       <div
