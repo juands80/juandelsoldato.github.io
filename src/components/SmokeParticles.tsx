@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 
 const IMG_W = 1672;
 const IMG_H = 941;
-const CHIMNEY_X = 833;
-const CHIMNEY_Y = 578;
+const CHIMNEY_X = 785;
+const CHIMNEY_Y = 602;
 
 interface Particle {
   x: number;
@@ -65,11 +65,11 @@ export default function SmokeParticles() {
         y: o.y,
         size: 1.5 + Math.random() * 2,
         opacity: 0.2 + Math.random() * 0.25,
-        speedY: -(0.15 + Math.random() * 0.2),
+        speedY: -(0.25 + Math.random() * 0.2),
         speedX: (Math.random() - 0.5) * 0.1,
         windDrift: 0.03 + Math.random() * 0.04,
         life: 0,
-        maxLife: 200 + Math.random() * 250,
+        maxLife: 350 + Math.random() * 300,
       });
     };
 
@@ -92,7 +92,7 @@ export default function SmokeParticles() {
         p.y += p.speedY;
         p.speedY *= 0.999;
         p.x += p.speedX + p.windDrift * lifeRatio;
-        p.size += 0.008;
+        p.        size += 0.006;
 
         const fadeOut = 1 - lifeRatio;
         const fadeIn = Math.min(lifeRatio * 5, 1);
