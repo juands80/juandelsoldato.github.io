@@ -54,7 +54,7 @@ export default function SmokeParticles() {
     };
 
     const particles: Particle[] = [];
-    const MAX_PARTICLES = 70;
+    const MAX_PARTICLES = 140;
     let frameId: number;
 
     const spawn = () => {
@@ -63,20 +63,20 @@ export default function SmokeParticles() {
       particles.push({
         x: o.x + (Math.random() - 0.5) * 2,
         y: o.y,
-        size: 1.5 + Math.random() * 2,
+        size: 0.75 + Math.random() * 1,
         opacity: 0.2 + Math.random() * 0.25,
-        speedY: -(0.25 + Math.random() * 0.2),
+        speedY: -(0.375 + Math.random() * 0.3),
         speedX: (Math.random() - 0.5) * 0.1,
         windDrift: 0.03 + Math.random() * 0.04,
         life: 0,
-        maxLife: 350 + Math.random() * 300,
+        maxLife: 525 + Math.random() * 450,
       });
     };
 
     const draw = () => {
       ctx!.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (Math.random() < 0.5) spawn();
+      if (Math.random() < 0.7) spawn();
 
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -92,7 +92,7 @@ export default function SmokeParticles() {
         p.y += p.speedY;
         p.speedY *= 0.999;
         p.x += p.speedX + p.windDrift * lifeRatio;
-        p.        size += 0.006;
+        p.        size += 0.003;
 
         const fadeOut = 1 - lifeRatio;
         const fadeIn = Math.min(lifeRatio * 5, 1);
