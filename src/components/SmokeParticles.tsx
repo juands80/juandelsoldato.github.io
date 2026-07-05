@@ -14,7 +14,7 @@ interface Particle {
   opacity: number;
   speedY: number;
   speedX: number;
-  drift: number;
+  windDrift: number;
   life: number;
   maxLife: number;
 }
@@ -40,54 +40,43 @@ export default function SmokeParticles() {
 
     mount.appendChild(canvas);
 
-    const scaleX = () => {
-      const rect = mount.parentElement?.getBoundingClientRect();
-      if (!rect) return 1;
-      const s = Math.max(rect.width / IMG_W, rect.height / IMG_H);
-      return s;
-    };
-
     const origin = () => {
       const rect = mount.parentElement?.getBoundingClientRect();
-      if (!rect) return { x: 0, y: 0 };
+      if (!rect) return { x: 0, y: 0, s: 1 };
       const s = Math.max(rect.width / IMG_W, rect.height / IMG_H);
       const imgW = IMG_W * s;
       const imgH = IMG_H * s;
-      const ox = (rect.width - imgW) / 2;
-      const oy = (rect.height - imgH) / 2;
       return {
-        x: ox + CHIMNEY_X * s,
-        y: oy + CHIMNEY_Y * s,
+        x: (rect.width - imgW) / 2 + CHIMNEY_X * s,
+        y: (rect.height - imgH) / 2 + CHIMNEY_Y * s,
+        s,
       };
     };
 
     const particles: Particle[] = [];
-    const MAX_PARTICLES = 25;
+    const MAX_PARTICLES = 70;
     let frameId: number;
 
     const spawn = () => {
+      if (particles.length >= MAX_PARTICLES) return;
       const o = origin();
-      const s = scaleX();
-      const speedBase = 3 + Math.random() * 4;
       particles.push({
-        x: o.x + (Math.random() - 0.5) * 4 * s,
+        x: o.x + (Math.random() - 0.5) * 2,
         y: o.y,
-        size: (3 + Math.random() * 6) * s,
-        opacity: 0.15 + Math.random() * 0.2,
-        speedY: -(2 + Math.random() * 5) * s * 0.25,
-        speedX: (Math.random() - 0.5) * 2 * s * 0.3,
-        drift: (Math.random() - 0.5) * 0.1,
+        size: 1.5 + Math.random() * 2,
+        opacity: 0.2 + Math.random() * 0.25,
+        speedY: -(0.15 + Math.random() * 0.2),
+        speedX: (Math.random() - 0.5) * 0.1,
+        windDrift: 0.03 + Math.random() * 0.04,
         life: 0,
-        maxLife: 150 + Math.random() * 200,
+        maxLife: 200 + Math.random() * 250,
       });
     };
 
     const draw = () => {
       ctx!.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (particles.length < MAX_PARTICLES && Math.random() < 0.15) {
-        spawn();
-      }
+      if (Math.random() < 0.5) spawn();
 
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -98,27 +87,28 @@ export default function SmokeParticles() {
           continue;
         }
 
-        p.y += p.speedY;
-        p.speedY *= 0.998;
-        p.x += p.speedX;
-        p.speedX += p.drift * 0.005;
-        p.size *= 1.002;
-
         const lifeRatio = p.life / p.maxLife;
+
+        p.y += p.speedY;
+        p.speedY *= 0.999;
+        p.x += p.speedX + p.windDrift * lifeRatio;
+        p.size += 0.008;
+
         const fadeOut = 1 - lifeRatio;
-        const alpha = p.opacity * fadeOut * Math.min(lifeRatio * 4, 1);
+        const fadeIn = Math.min(lifeRatio * 5, 1);
+        const alpha = p.opacity * fadeOut * fadeIn;
 
         ctx!.globalAlpha = alpha;
-        ctx!.fillStyle = "#F0EDE4";
+        ctx!.fillStyle = "#EDE8DE";
 
         ctx!.beginPath();
         ctx!.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx!.fill();
 
-        ctx!.globalAlpha = alpha * 0.4;
-        ctx!.filter = "blur(4px)";
+        ctx!.globalAlpha = alpha * 0.3;
+        ctx!.filter = "blur(6px)";
         ctx!.beginPath();
-        ctx!.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
+        ctx!.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
         ctx!.fill();
         ctx!.filter = "none";
       }
