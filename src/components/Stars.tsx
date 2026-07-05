@@ -35,7 +35,7 @@ export default function Stars() {
     for (let i = 0; i < count; i++) {
       stars.push({
         x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
+        y: Math.random() * canvas.height * 0.58,
         size: Math.random() < 0.6 ? 1 : Math.random() < 0.85 ? 2 : 3,
         opacity: [0.2, 0.4, 0.6, 0.8, 1.0][Math.floor(Math.random() * 5)],
         hasGlow: Math.random() < 0.1,
