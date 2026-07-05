@@ -131,15 +131,14 @@ export default function Hero() {
           transition={{ duration: 0.6, delay: 1.0 }}
           className="flex items-center justify-center gap-6 mt-10 flex-wrap"
         >
-          {/* Primary button */}
+          {/* View my work */}
           <a
             href="#projects"
-            className="inline-flex items-center justify-center gap-[10px] rounded-full text-white font-medium no-underline transition-all duration-250 hover:scale-[1.03]"
+            className="inline-flex items-center justify-center rounded-full text-white font-medium no-underline transition-all duration-250 hover:bg-[rgba(255,255,255,0.05)]"
             style={{
               height: 60,
               width: 210,
-              background: "linear-gradient(180deg, #557EFF 0%, #7B5DFF 50%, #C44FFF 100%)",
-              boxShadow: "0 0 35px rgba(120,90,255,0.50)",
+              border: "1px solid rgba(255,255,255,0.20)",
               fontSize: 16,
             }}
           >
@@ -153,24 +152,11 @@ export default function Hero() {
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              style={{ marginLeft: 10 }}
             >
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="12 5 19 12 12 19" />
             </svg>
-          </a>
-
-          {/* Secondary button */}
-          <a
-            href="#"
-            className="inline-flex items-center justify-center rounded-full text-white font-medium no-underline transition-all duration-250 hover:bg-[rgba(255,255,255,0.05)]"
-            style={{
-              height: 60,
-              width: 210,
-              border: "1px solid rgba(255,255,255,0.20)",
-              fontSize: 16,
-            }}
-          >
-            Download CV
           </a>
         </motion.div>
 
