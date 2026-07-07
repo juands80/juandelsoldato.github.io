@@ -21,7 +21,7 @@ export default function Hero() {
         className="absolute inset-0"
         style={{
           zIndex: 0,
-          backgroundImage: "url(/juandelsoldato.github.io/firewatch2.png)",
+          backgroundImage: "url(/juandelsoldato.github.io/firewatch3.png)",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
