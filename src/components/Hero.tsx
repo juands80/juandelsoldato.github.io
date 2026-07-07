@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Stars from "./Stars";
-import SmokeParticles from "./SmokeParticles";
+import AmbientEffects from "./AmbientEffects";
 
 export default function Hero() {
   return (
@@ -27,31 +26,8 @@ export default function Hero() {
         }}
       />
 
-      {/* Nebulas overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ zIndex: 1 }}
-      >
-        <div
-          className="absolute w-full h-full"
-          style={{
-            background: [
-              "radial-gradient(circle at 25% 15%, rgba(70,60,255,0.18), transparent 60%)",
-              "radial-gradient(circle at 75% 10%, rgba(180,70,255,0.15), transparent 65%)",
-              "radial-gradient(circle at 60% 35%, rgba(255,90,180,0.08), transparent 55%)",
-            ].join(", "),
-            filter: "blur(200px)",
-          }}
-        />
-      </div>
-
-      {/* Stars */}
-      <div style={{ zIndex: 2, position: "relative" }}>
-        <Stars />
-      </div>
-
-      {/* Chimney smoke */}
-      <SmokeParticles />
+      {/* Ambient cinematic effects */}
+      <AmbientEffects />
 
       {/* Content wrapper */}
       <div
